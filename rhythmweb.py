@@ -18,7 +18,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
-import cStringIO
+import io
 import cgi
 import json
 import os
@@ -170,6 +170,11 @@ class RhythmwebServer(object):
         self.album = None
         self.title = None
         self.stream = None
+        #next three - when debugging use the validator thus
+        #comment out the standard make_server
+        #from wsgiref.validate import validator
+        #app = validator(self._wsgi)
+        #self._httpd = make_server(hostname, port, app)
         self._httpd = make_server(hostname, port, self._wsgi,
                                   handler_class=LoggingWSGIRequestHandler)
         self._watch_cb_id = GObject.io_add_watch(self._httpd.socket,
@@ -203,18 +208,25 @@ class RhythmwebServer(object):
         path = environ['PATH_INFO']
 
         if path in ('/', ''):
+            print ("path")
             return self._handle_interface(environ, response)
         elif path == '/playlists':
+            print ("playlist")
             return self._handle_playlists(environ, response)
         elif re.match("/playlist/.*", path) is not None:
+            print ("match")
             return self._handle_playlist_info(environ, response, re.match("/playlist/(.*)", path).group(1))
         elif path == '/playqueue':
+            print ("playqueue")
             return self._handle_playqueue_info(environ, response)
         elif path.startswith('/stock/'):
+            print ("stock")
             return self._handle_stock(environ, response)
         elif path.startswith('/cover/'):
+            print ("cover")
             return self._handle_cover(environ, response)
         else:
+            print ("static")
             return self._handle_static(environ, response)
 
     def _handle_interface(self, environ, response):
@@ -318,15 +330,14 @@ class RhythmwebServer(object):
             else:
                 log("dunno1", action)
 
-            #log("eviron", environ)
-            #log("response", response)
             if responsetext != '':
                 response_headers = [('Content-type','application/json; charset=UTF-8')]
                 response('200 OK', response_headers)
-                return json.dumps(responsetext)
+                return io.BytesIO((json.dumps(responsetext)).encode())
             else:
-                response('204 No Content', [('Content-type','text/plain')])
-                return 'OK'
+                #response('204 No Content', [('Content-type','text/plain')])
+                response('204 No Content', [])
+                return [b'OK']
 
         # generate the playing headline
         title = 'Rhythmweb'
@@ -357,7 +368,7 @@ class RhythmwebServer(object):
         # generate the playlist
         playlist = '<tr><td colspan="3">Playlist is empty</td></tr>'
         if playlist_rows.get_size() > 0:
-            outputstr = cStringIO.StringIO()
+            outputstr = io.StringIO()
             for row in playlist_rows:
                 entry = row[0]
                 outputstr.write('<tr id="')
@@ -406,7 +417,7 @@ class RhythmwebServer(object):
         player_html = open(resolve_path('player.html'))
         response_headers = [('Content-type','text/html; charset=UTF-8')]
         response('200 OK', response_headers)
-        return player_html.read() % { 'title': title,
+        return io.BytesIO((player_html.read() % { 'title': title,
                                       'refresh': refresh,
                                       'play': play,
                                       'playing': playing,
@@ -414,7 +425,7 @@ class RhythmwebServer(object):
                                       'toggle_repeat_active': toggle_repeat_active,
                                       'toggle_shuffle_active': toggle_shuffle_active,
                                       'currentlyplaying': val
-                                    }
+                                    }).encode())
 
     def _handle_playlists(self, environ, response):
         # get a list of all of the playlists
@@ -442,7 +453,7 @@ class RhythmwebServer(object):
         playlist_data = {'selected': current_playlist_name, 'playlists': playlists};
         response_headers = [('Content-type','application/json; charset=UTF-8')]
         response('200 OK', response_headers)
-        return json.dumps(playlist_data)
+        return io.BytesIO(json.dumps(playlist_data).encode())
 
 
     def _handle_playlist_info(self, environ, response, playlist_name):
@@ -484,7 +495,7 @@ class RhythmwebServer(object):
         playlist_data = {'name': playlist_name, 'tracks': tracks};
         response_headers = [('Content-type','application/json; charset=UTF-8')]
         response('200 OK', response_headers)
-        return json.dumps(playlist_data)
+        return io.BytesIO(json.dumps(playlist_data).encode())
 
     def _play_track(self, player, shell, track, playlist):
         source = ''
@@ -576,18 +587,18 @@ class RhythmwebServer(object):
 
             content_type, val = Gio.content_type_guess(filename=fname, data=None)
 
-            icon = open(fname)
+            icon = open(fname, "rb")
             lastmod = time.gmtime(os.path.getmtime(fname))
             lastmod = time.strftime("%a, %d %b %Y %H:%M:%S +0000", lastmod)
             response_headers = [('Content-type',content_type),
                                 ('Last-Modified', lastmod)]
             response('200 OK', response_headers)
-            return icon
+            return io.BytesIO(icon.read())
         else:
             log("icon", "none")
             response_headers = [('Content-type','text/plain')]
             response('404 Not Found', response_headers)
-            return 'Stock not found: %s' % stock_id
+            return io.BytesIO(('Stock not found: %s' % stock_id).encode())
 
     def _handle_cover(self, environ, response):
         player = self.plugin.player
@@ -608,13 +619,13 @@ class RhythmwebServer(object):
         # use gio to guess at the content type based on filename
         content_type, val = Gio.content_type_guess(filename=fname, data=None)
 
-        icon = open(fname)
+        icon = open(fname, "rb")
         lastmod = time.gmtime(os.path.getmtime(fname))
         lastmod = time.strftime("%a, %d %b %Y %H:%M:%S +0000", lastmod)
         response_headers = [('Content-type',content_type),
                             ('Last-Modified', lastmod)]
         response('200 OK', response_headers)
-        return icon
+        return io.BytesIO(icon.read())
 
     def _handle_static(self, environ, response):
         rpath = environ['PATH_INFO']
@@ -632,11 +643,12 @@ class RhythmwebServer(object):
             response_headers = [('Content-type','text/css'),
                                 ('Last-Modified', lastmod)]
             response('200 OK', response_headers)
-            return open(path)
+            o = open(path, "rb")
+            return io.BytesIO(o.read())
         else:
             response_headers = [('Content-type','text/plain')]
             response('404 Not Found', response_headers)
-            return 'File not found: %s' % rpath
+            return io.BytesIO(('File not found: %s' % rpath).encode())
 
 
 class LoggingWSGIRequestHandler(WSGIRequestHandler):
@@ -683,7 +695,7 @@ def return_redirect(path, environ, response):
     response(status, response_headers)
 
     #log("response", response)
-    return [ 'Redirecting...' ]
+    return ['Redirecting...']
 
 def resolve_path(path):
     return os.path.join(os.path.dirname(__file__), path)
