@@ -244,10 +244,12 @@ class RhythmwebServer(object):
             playlist_rows = queue.props.query_model
 
         # handle any action
+        print (environ)
         if environ['REQUEST_METHOD'] == 'POST':
             try:
                 params = parse_post(environ)
-                action = params['action'][0]
+                print (params)
+                action = (params[b'action'][0]).decode("utf-8")
             except:
                 params = []
                 action = "unknown"
@@ -695,7 +697,7 @@ def return_redirect(path, environ, response):
     response(status, response_headers)
 
     #log("response", response)
-    return ['Redirecting...']
+    return [b'Redirecting...']
 
 def resolve_path(path):
     return os.path.join(os.path.dirname(__file__), path)
