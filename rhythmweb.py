@@ -249,21 +249,22 @@ class RhythmwebServer(object):
             try:
                 params = parse_post(environ)
                 print (params)
-                action = (params[b'action'][0]).decode("utf-8")
+                action = params[b'action'][0]
+                # we need to convert all params to string equivs - lets use the coverart key change function
             except:
                 params = []
                 action = "unknown"
 
             log('action', action)
             responsetext = ''
-            if action == 'play' and not player.get_playing_entry() and \
+            if action == b'play' and not player.get_playing_entry() and \
                 not player.get_playing_source():
                     # no current playlist is playing.
-                    if 'playlist' in params and len(params['playlist']) > 0:
+                    if b'playlist' in params and len(params[b'playlist']) > 0:
                         # play the playlist that was requested
-                        playlist = params['playlist'][0]
+                        playlist = params[b'playlist'][0]
                         log("play", playlist)
-                        if(playlist == 'Play Queue'):
+                        if(playlist == b'Play Queue'):
                             log("play", "play queue")
                             if playlist_rows.get_size() > 0:
                                 log("play", "get size")
@@ -277,8 +278,8 @@ class RhythmwebServer(object):
                             # get the first track in the requested playlist
                             log("play", "first track")
                             selected_track = None
-                            if 'track' in params and len(params['track']) > 0:
-                                selected_track = params['track'][0]
+                            if b'track' in params and len(params[b'track']) > 0:
+                                selected_track = params[b'track'][0]
                             self._play_track(player, shell, selected_track, playlist)
                             responsetext = {'playing':'true'}
                     else:
@@ -292,41 +293,41 @@ class RhythmwebServer(object):
                         else:
                             log("play", "no rows in playqueue(2)")
 
-            elif action == 'play':
+            elif action == b'play':
                 player.playpause(True)
                 r, val = player.get_playing()
                 responsetext = {'playing':val}
                 log("play", "pause")
-            elif action == 'play-track' and 'track' in params and len(params['track']) > 0:
+            elif action == b'play-track' and b'track' in params and len(params[b'track']) > 0:
                 # user wants to play a specific song in the play list
-                track = params['track'][0]
+                track = params[b'track'][0]
                 playlist = ''
-                if 'playlist' in params and len(params['playlist']) > 0:
-                    playlist = params['playlist'][0]
+                if b'playlist' in params and len(params[b'playlist']) > 0:
+                    playlist = params[b'playlist'][0]
                 self._play_track(player, shell, track, playlist)
-            elif action == 'play-playlist' and 'playlist' in params and len(params['playlist']) > 0:
+            elif action == b'play-playlist' and b'playlist' in params and len(params[b'playlist']) > 0:
                 # user wants to play a specific playlist
                 log('play playlist','')
-                playlist = params['playlist'][0]
+                playlist = params[b'playlist'][0]
                 self._play_playlist(player, shell, playlist)
-            elif action == 'pause':
+            elif action == b'pause':
                 player.pause()
                 responsetext = {'playing':'false'}
-            elif action == 'next':
+            elif action == b'next':
                 player.do_next()
-            elif action == 'prev':
+            elif action == b'prev':
                 player.do_previous()
-            elif action == 'stop':
+            elif action == b'stop':
                 player.stop()
                 responsetext = {'playing':'false'}
-            elif action == 'toggle-repeat':
+            elif action == b'toggle-repeat':
                 self._toggle_play_order(player, False)
-            elif action == 'toggle-shuffle':
+            elif action == b'toggle-shuffle':
                 self._toggle_play_order(player, True)
-            elif action == 'vol-up':
+            elif action == b'vol-up':
                 (dummy, vol) = player.get_volume()
                 player.set_volume(vol + 0.05)
-            elif action == 'vol-down':
+            elif action == b'vol-down':
                 (dummy, vol) = player.get_volume()
                 player.set_volume(vol - 0.05)
             else:
@@ -503,6 +504,7 @@ class RhythmwebServer(object):
         source = ''
 
         log("playing from playlist ", playlist)
+        track = track.decode('utf-8')
         if playlist == '':
             # find the current playing source, or select the active queue source
             if player.get_playing_source() is not None:
@@ -530,6 +532,7 @@ class RhythmwebServer(object):
             player.play_entry(entry, source)
 
     def _find_playlist_by_name(self, playlist_name):
+        print (playlist_name)
         playlist_model_entries = self.plugin.shell.props.playlist_manager.get_playlists()
         if playlist_model_entries:
             for playlist_candidate in playlist_model_entries:
@@ -541,6 +544,7 @@ class RhythmwebServer(object):
         return self.plugin.shell.props.queue_source
 
     def _play_playlist(self, player, shell, playlist_name):
+        playlist_name = playlist_name.decode('utf-8')
         playlist_candidate = self._find_playlist_by_name(playlist_name)
         if playlist_candidate is not None:
             playlist_rows = playlist_candidate.get_query_model()
